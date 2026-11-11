@@ -12,6 +12,7 @@ mod commands;
 pub mod engine_supervisor;
 mod helpers;
 mod input;
+mod island;
 mod language_detection;
 mod languages;
 mod llm_client;

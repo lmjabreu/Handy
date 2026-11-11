@@ -968,6 +968,10 @@ impl TranscriptionManager {
 
     /// Emit a working-phase event to the streaming overlay (spinner + label).
     pub fn emit_stream_working(&self, kind: StreamWorkKind) {
+        crate::island::set_phase(match kind {
+            StreamWorkKind::Transcribing => "transcribing",
+            StreamWorkKind::Polishing => "processing",
+        });
         let _ = StreamPhaseEvent {
             phase: StreamPhase::Working,
             kind: Some(kind),
@@ -1423,6 +1427,7 @@ fn agreed_language(transcripts: &[Transcript]) -> Option<String> {
 }
 
 fn emit_stream_text(app_handle: &AppHandle, committed: &str, tentative: &str) {
+    crate::island::set_text(committed, tentative);
     let _ = StreamTextEvent {
         committed: committed.to_string(),
         tentative: tentative.to_string(),

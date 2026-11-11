@@ -1,0 +1,31 @@
+# Builds Handy's Dynamic Island widget extension on its own; the Tauri bundle
+# copies the result into Handy.app/Contents/PlugIns (tauri.conf.json).
+# Build with build.sh in this folder.
+name: HandyIslandWidget
+options:
+  bundleIdPrefix: com.pais.handy
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "27.0"
+    SWIFT_VERSION: "5.0"
+    ARCHS: arm64
+    CODE_SIGN_STYLE: Automatic
+    OTHER_SWIFT_FLAGS: "$(ISLAND_OVERRIDES_FLAGS)"
+targets:
+  HandyIslandWidget:
+    type: app-extension
+    platform: macOS
+    sources: [Sources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pais.handy.HandyIslandWidget
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Handy
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: HandyIslandWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true

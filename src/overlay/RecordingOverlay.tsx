@@ -80,6 +80,9 @@ const RecordingOverlay: React.FC = () => {
   // while overflowing, so the resting first line stays crisp flush under the pill.
   const [overflowing, setOverflowing] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // True while the Dynamic Island's Live Activity carries the session (macOS);
+  // the window stays on screen, which ActivityKit needs, but draws nothing.
+  const [islandActive, setIslandActive] = useState(false);
   const [noticeWidth, setNoticeWidth] = useState<number>();
   const noticeProbeRef = useRef<HTMLSpanElement>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -98,6 +101,11 @@ const RecordingOverlay: React.FC = () => {
         clearTimeout(fadeTimerRef.current);
         setNotice(event.payload);
       });
+
+      const unlistenIsland = await listen<boolean>(
+        "overlay-island-active",
+        (event) => setIslandActive(event.payload),
+      );
 
       const unlistenShow = await listen("show-overlay", async (event) => {
         const overlayState = event.payload as OverlayState;
@@ -205,6 +213,7 @@ const RecordingOverlay: React.FC = () => {
 
       return () => {
         unlistenNotice();
+        unlistenIsland();
         unlistenShow();
         unlistenHide();
         unlistenReady();
@@ -264,6 +273,7 @@ const RecordingOverlay: React.FC = () => {
   }, [noticeTitle, isVisible]);
 
   if (!isVisible && !shownNotice) return null;
+  if (islandActive) return null;
 
   // Re-pin when the user is within ~a line of the bottom; unpin otherwise.
   const handleStreamScroll = () => {

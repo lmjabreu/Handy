@@ -1,6 +1,8 @@
 fn main() {
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     build_apple_intelligence_bridge();
+    #[cfg(target_os = "macos")]
+    build_island_bridge();
 
     generate_tray_translations();
 
@@ -378,6 +380,106 @@ fn escape_string(s: &str) -> String {
 }
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+/// Compiles the Dynamic Island Live Activity bridge (swift/island_activity.swift)
+/// into a static library. Against an SDK that still marks ActivityKit
+/// unavailable on macOS (27.2), it compiles against patched interface copies
+/// from island-widget/make-overrides.sh; ActivityKit is weak-linked and every
+/// call is gated on macOS 27, so older systems launch without it.
+#[cfg(target_os = "macos")]
+fn build_island_bridge() {
+    use std::env;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    const SOURCES: [&str; 2] = [
+        "swift/island_activity.swift",
+        "island-widget/Sources/HandyIslandAttributes.swift",
+    ];
+    for source in SOURCES {
+        println!("cargo:rerun-if-changed={source}");
+    }
+    println!("cargo:rerun-if-changed=island-widget/make-overrides.sh");
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+    let sdk_path = env::var("SDKROOT").unwrap_or_else(|_| {
+        String::from_utf8(
+            Command::new("xcrun")
+                .args(["--sdk", "macosx", "--show-sdk-path"])
+                .output()
+                .expect("Failed to locate macOS SDK")
+                .stdout,
+        )
+        .expect("SDK path is not valid UTF-8")
+        .trim()
+        .to_string()
+    });
+    let swiftc = env::var("SWIFTC").unwrap_or_else(|_| "swiftc".to_string());
+
+    let overrides = Command::new("sh")
+        .args([
+            "island-widget/make-overrides.sh",
+            out_dir
+                .join("island-overrides")
+                .to_str()
+                .expect("utf-8 path"),
+            &sdk_path,
+        ])
+        .output()
+        .expect("Failed to run make-overrides.sh");
+    if !overrides.status.success() {
+        println!("cargo:warning=Dynamic Island bridge skipped: make-overrides.sh failed");
+        return;
+    }
+    let overrides_dir = String::from_utf8_lossy(&overrides.stdout)
+        .trim()
+        .to_string();
+
+    let object_path = out_dir.join("island_activity.o");
+    let mut compile = Command::new(&swiftc);
+    compile.args([
+        "-parse-as-library",
+        "-target",
+        "arm64-apple-macosx11.0",
+        "-sdk",
+        &sdk_path,
+        "-O",
+        "-module-name",
+        "HandyIsland",
+    ]);
+    if !overrides_dir.is_empty() {
+        compile.args(["-I", &overrides_dir]);
+    }
+    compile
+        .args(["-c"])
+        .args(SOURCES)
+        .args(["-o", object_path.to_str().expect("utf-8 path")]);
+    // swiftc names the object after the first source when given several, so
+    // compile into one with -wmo.
+    compile.arg("-wmo");
+    let status = compile
+        .status()
+        .expect("Failed to invoke swiftc for island bridge");
+    if !status.success() {
+        panic!("swiftc failed to compile the Dynamic Island bridge");
+    }
+
+    let lib_path = out_dir.join("libhandy_island.a");
+    let status = Command::new("libtool")
+        .args(["-static", "-o", lib_path.to_str().expect("utf-8 path")])
+        .arg(&object_path)
+        .status()
+        .expect("Failed to run libtool for island bridge");
+    if !status.success() {
+        panic!("libtool failed for the Dynamic Island bridge");
+    }
+
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static=handy_island");
+    println!("cargo:rustc-link-lib=framework=AppKit");
+    println!("cargo:rustc-link-arg=-weak_framework");
+    println!("cargo:rustc-link-arg=ActivityKit");
+}
+
 fn build_apple_intelligence_bridge() {
     use std::env;
     use std::path::{Path, PathBuf};

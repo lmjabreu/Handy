@@ -19,3 +19,6 @@ src-tauri/src/catalog/catalog.json
 # Misc
 .DS_Store
 *.log
+
+# Dynamic Island widget build output
+src-tauri/island-widget/build/

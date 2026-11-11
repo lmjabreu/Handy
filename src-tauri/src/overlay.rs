@@ -624,6 +624,16 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             );
         }
 
+        // With the island carrying the session, the overlay's card stays
+        // hidden; the panel itself must stay on screen for ActivityKit.
+        // Notices stay in the overlay, which can explain them.
+        let island_active = if state == NOTICE_STATE || state == LIVE_NOTICE_STATE {
+            crate::island::end();
+            false
+        } else {
+            crate::island::show(app_handle, state)
+        };
+        let _ = overlay_window.emit("overlay-island-active", island_active);
         let _ = overlay_window.emit("show-overlay", state);
     }
 }
@@ -774,6 +784,7 @@ static OVERLAY_SESSION_LIVE: AtomicBool = AtomicBool::new(false);
 
 /// Hides the recording overlay window with fade-out animation
 pub fn hide_recording_overlay(app_handle: &AppHandle) {
+    crate::island::end();
     OVERLAY_SESSION_SHOWING.store(false, Ordering::SeqCst);
     OVERLAY_SESSION_LIVE.store(false, Ordering::SeqCst);
     // Always hide the overlay regardless of settings - if setting was changed while recording,

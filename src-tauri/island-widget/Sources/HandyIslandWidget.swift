@@ -29,7 +29,7 @@ struct HandyIslandActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Indicator(phase: context.state.phase)
+                    Indicator(state: context.state)
                         .frame(maxHeight: .infinity, alignment: .center)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -61,9 +61,9 @@ struct HandyIslandActivity: Widget {
 /// The overlay's left side: the dot and waveform while listening, a spinner
 /// and label while working.
 private struct Indicator: View {
-    let phase: String
+    let state: HandyIslandAttributes.ContentState
     var body: some View {
-        if phase == "recording" {
+        if state.phase == "recording" {
             HStack(spacing: 10) {
                 Dot()
                 Waveform()
@@ -71,7 +71,7 @@ private struct Indicator: View {
         } else {
             HStack(spacing: 8) {
                 Spinner()
-                Text(phase == "processing" ? "Processing…" : "Transcribing…")
+                Text(state.label)
                     .font(.system(size: 12))
                     .foregroundStyle(muted)
             }
@@ -83,7 +83,7 @@ private struct ControlRow: View {
     let state: HandyIslandAttributes.ContentState
     var body: some View {
         HStack {
-            Indicator(phase: state.phase)
+            Indicator(state: state)
             Spacer(minLength: 8)
             Elapsed(since: state.startedAt)
         }
@@ -151,9 +151,8 @@ private struct Transcript: View {
     let state: HandyIslandAttributes.ContentState
     var body: some View {
         if state.committed.isEmpty && state.tentative.isEmpty {
-            Text(state.phase == "recording" ? "Listening…" : " ")
-                .font(.system(size: 15).italic())
-                .foregroundStyle(muted)
+            // Like the overlay: nothing until there is text to show.
+            EmptyView()
         } else {
             let separator = state.committed.isEmpty ? "" : " "
             Text("\(state.committed)\(separator)\(Text(state.tentative).foregroundStyle(muted))")

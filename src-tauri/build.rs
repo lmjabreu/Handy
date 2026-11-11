@@ -307,6 +307,17 @@ fn generate_tray_translations() {
             for (key, title) in titles {
                 tray[key] = title.clone();
             }
+            // The overlay's working labels, which the Dynamic Island Live
+            // Activity also shows (island.rs) as `overlay_transcribing` and
+            // `overlay_processing`.
+            for (key, field) in [
+                ("transcribing", "overlayTranscribing"),
+                ("processing", "overlayProcessing"),
+            ] {
+                if let Some(label) = parsed.get("overlay").and_then(|overlay| overlay.get(key)) {
+                    tray[field] = label.clone();
+                }
+            }
             translations.insert(lang, tray);
         }
     }

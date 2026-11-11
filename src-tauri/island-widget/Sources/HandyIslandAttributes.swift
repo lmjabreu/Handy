@@ -8,6 +8,9 @@ struct HandyIslandAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         /// "recording", "transcribing" or "processing".
         var phase: String
+        /// The phase's label in Handy's language, from Handy's translations;
+        /// empty while listening.
+        var label: String
         /// Live transcript: settled text, then the part the model may still rewrite.
         var committed: String
         var tentative: String

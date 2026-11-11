@@ -35,6 +35,8 @@ mod imp {
     #[serde(rename_all = "camelCase")]
     pub(super) struct ContentState {
         pub(super) phase: String,
+        /// The phase's label in Handy's language; empty while listening.
+        pub(super) label: String,
         pub(super) committed: String,
         pub(super) tentative: String,
         /// Seconds since 1970, decoded by the Swift side.
@@ -47,6 +49,22 @@ mod imp {
     }
 
     static SESSION: Mutex<Option<Session>> = Mutex::new(None);
+    /// Handy's interface language when the session started (`app_language`).
+    static LANGUAGE: Mutex<String> = Mutex::new(String::new());
+
+    /// The overlay's own label for `phase`, from the same translations.
+    pub(super) fn label_for(language: &str, phase: &str) -> String {
+        let strings = crate::tray_i18n::get_tray_translations(Some(language.to_string()));
+        match phase {
+            "transcribing" => strings.overlay_transcribing,
+            "processing" => strings.overlay_processing,
+            _ => String::new(),
+        }
+    }
+
+    fn current_label(phase: &str) -> String {
+        label_for(&LANGUAGE.lock().unwrap_or_else(|e| e.into_inner()), phase)
+    }
 
     fn json(state: &ContentState) -> Option<CString> {
         CString::new(serde_json::to_string(state).ok()?).ok()
@@ -97,6 +115,7 @@ mod imp {
     fn try_start(phase: &str, started_at: f64) -> Result<(), String> {
         let state = ContentState {
             phase: phase.to_string(),
+            label: current_label(phase),
             committed: String::new(),
             tentative: String::new(),
             started_at,
@@ -166,9 +185,12 @@ mod imp {
             return false;
         }
         *PENDING_PHASE.lock().unwrap_or_else(|e| e.into_inner()) = Some(phase.to_string());
+        *LANGUAGE.lock().unwrap_or_else(|e| e.into_inner()) =
+            settings::get_settings(app).app_language;
         let running = session(|s| {
             if let Some(s) = s.as_mut() {
                 s.state.phase = phase.to_string();
+                s.state.label = current_label(phase);
                 send(&s.state);
                 s.last_sent = Instant::now();
                 true
@@ -219,6 +241,7 @@ mod imp {
         session(|s| {
             let Some(s) = s.as_mut() else { return };
             s.state.phase = phase.to_string();
+            s.state.label = current_label(phase);
             log::debug!("Dynamic Island phase -> {phase}");
             send(&s.state);
             s.last_sent = Instant::now();
@@ -238,7 +261,21 @@ mod imp {
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
-    use super::imp::ContentState;
+    use super::imp::{label_for, ContentState};
+
+    /// The island reuses the overlay's translated labels, not its own copy.
+    #[test]
+    fn working_labels_come_from_the_overlay_translations() {
+        assert_eq!(label_for("en", "transcribing"), "Transcribing...");
+        assert_eq!(label_for("en", "processing"), "Processing...");
+        assert_eq!(label_for("en", "recording"), "");
+        let german = label_for("de", "transcribing");
+        assert!(!german.is_empty());
+        assert_ne!(
+            german, "Transcribing...",
+            "German should not fall back to English"
+        );
+    }
 
     /// The Swift side decodes this JSON into HandyIslandAttributes.ContentState
     /// (island-widget/Sources/HandyIslandAttributes.swift) with seconds-since-1970
@@ -248,6 +285,7 @@ mod tests {
     fn content_state_json_matches_the_swift_struct() {
         let state = ContentState {
             phase: "recording".into(),
+            label: String::new(),
             committed: "Hello".into(),
             tentative: "wor".into(),
             started_at: 1_789_000_000.5,
@@ -255,7 +293,10 @@ mod tests {
         let value = serde_json::to_value(&state).unwrap();
         let mut keys: Vec<_> = value.as_object().unwrap().keys().cloned().collect();
         keys.sort();
-        assert_eq!(keys, ["committed", "phase", "startedAt", "tentative"]);
+        assert_eq!(
+            keys,
+            ["committed", "label", "phase", "startedAt", "tentative"]
+        );
         assert_eq!(value["startedAt"], 1_789_000_000.5);
         assert_eq!(value["phase"], "recording");
     }
@@ -265,6 +306,7 @@ mod tests {
         let swift = include_str!("../island-widget/Sources/HandyIslandAttributes.swift");
         for field in [
             "var phase: String",
+            "var label: String",
             "var committed: String",
             "var tentative: String",
             "var startedAt: Date",

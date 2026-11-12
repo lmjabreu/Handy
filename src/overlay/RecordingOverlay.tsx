@@ -400,7 +400,10 @@ const RecordingOverlay: React.FC = () => {
     const collapsed = working && !hasText;
 
     return (
-      <div dir={direction} className={`ov-stage ${position}`}>
+      <div
+        dir={direction}
+        className={`ov-stage ${position} ${islandCompanion ? "island" : ""}`}
+      >
         {noticeProbe}
         <div
           key={session}
@@ -462,7 +465,9 @@ const RecordingOverlay: React.FC = () => {
   return (
     <div
       dir={direction}
-      className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""}`}
+      className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""} ${
+        islandCompanion ? "island" : ""
+      }`}
     >
       {noticeProbe}
       <div

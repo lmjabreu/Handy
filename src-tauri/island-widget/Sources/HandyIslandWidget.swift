@@ -52,9 +52,11 @@ struct HandyIslandActivity: Widget {
                     .padding(.bottom, 4)
                 }
             } compactLeading: {
-                PhaseGlyph(phase: context.state.phase)
+                CompactLeading(state: context.state)
             } compactTrailing: {
-                CompactTrailing(state: context.state)
+                // macOS draws its microphone indicator on this side while
+                // Handy records, over anything placed here.
+                EmptyView()
             } minimal: {
                 PhaseGlyph(phase: context.state.phase)
             }
@@ -103,20 +105,23 @@ private struct ControlRow: View {
     }
 }
 
-/// The newest words while listening, so the island shows the dictation is
-/// heard without a click; nothing before the first word or while working.
-/// The compact island gives this side about 100pt, one or two words.
-private struct CompactTrailing: View {
+/// The phase glyph, then the newest words while listening, so the island
+/// shows the dictation is heard without a click. They sit on the leading
+/// side because macOS puts its microphone indicator on the trailing one.
+private struct CompactLeading: View {
     let state: HandyIslandAttributes.ContentState
     var body: some View {
         let words = [state.committed, state.tentative].filter { !$0.isEmpty }.joined(separator: " ")
-        if isListening(state.phase) && !words.isEmpty {
-            Text(words)
-                .font(.system(size: 13).italic())
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .truncationMode(.head)
-                .frame(maxWidth: 120, alignment: .trailing)
+        HStack(spacing: 8) {
+            PhaseGlyph(phase: state.phase)
+            if isListening(state.phase) && !words.isEmpty {
+                Text(words)
+                    .font(.system(size: 13).italic())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: 120, alignment: .trailing)
+            }
         }
     }
 }

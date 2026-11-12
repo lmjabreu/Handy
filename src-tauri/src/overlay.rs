@@ -280,7 +280,9 @@ fn calculate_overlay_position(
 
     let x = monitor_x + (monitor_width - width) / 2.0;
     let y = match settings.overlay_position {
-        OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET,
+        // Shown alongside a running Dynamic Island activity, the panel moves
+        // down so it clears the island, which extends lower than it does idle.
+        OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET + crate::island::overlay_top_extra(),
         OverlayPosition::Bottom => {
             // work_area.position shares monitor.position's global coordinate
             // space, so no monitor offset is added.

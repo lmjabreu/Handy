@@ -1186,6 +1186,16 @@ pub fn run(cli_args: CliArgs) {
     #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     app.run(|app, event| match &event {
         #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => {
+            // handy://island/... comes from a click on the Dynamic Island.
+            if urls
+                .iter()
+                .any(|url| url.scheme() == "handy" && url.host_str() == Some("island"))
+            {
+                island::reveal_overlay(app);
+            }
+        }
+        #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => {
             // Fired when the already-running bundle is launched again from
             // Spotlight/Finder or the Dock icon is clicked. If the settings

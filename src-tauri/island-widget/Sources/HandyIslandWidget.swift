@@ -37,11 +37,19 @@ struct HandyIslandActivity: Widget {
                         .frame(maxHeight: .infinity, alignment: .center)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Transcript(state: context.state)
-                        .lineLimit(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 6)
-                        .padding(.bottom, 4)
+                    // Handy sends only the newest words (island.rs), and older
+                    // lines give way at the top, as in the overlay. A click on
+                    // the text opens the overlay's Live panel, which scrolls.
+                    Link(destination: URL(string: "handy://island/transcript")!) {
+                        Transcript(state: context.state)
+                            .lineLimit(2)
+                            // Without this a widget's Text stays on one line and
+                            // cuts the newest words off with "…".
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.top, 6)
+                    .padding(.bottom, 4)
                 }
             } compactLeading: {
                 PhaseGlyph(phase: context.state.phase)
@@ -58,12 +66,17 @@ struct HandyIslandActivity: Widget {
     }
 }
 
+/// Handy's listening phases: Minimal records as "recording", Live as "streaming".
+private func isListening(_ phase: String) -> Bool {
+    phase == "recording" || phase == "streaming"
+}
+
 /// The overlay's left side: the dot and waveform while listening, a spinner
 /// and label while working.
 private struct Indicator: View {
     let state: HandyIslandAttributes.ContentState
     var body: some View {
-        if state.phase == "recording" {
+        if isListening(state.phase) {
             HStack(spacing: 10) {
                 Dot()
                 Waveform()
@@ -93,7 +106,7 @@ private struct ControlRow: View {
 private struct PhaseGlyph: View {
     let phase: String
     var body: some View {
-        if phase == "recording" { Dot() } else { Spinner() }
+        if isListening(phase) { Dot() } else { Spinner() }
     }
 }
 

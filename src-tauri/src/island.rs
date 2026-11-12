@@ -46,6 +46,9 @@ mod imp {
     struct Session {
         state: ContentState,
         last_sent: Instant,
+        /// The user asked for the overlay's Live panel by clicking the island,
+        /// so the overlay stays visible for the rest of this session.
+        revealed: bool,
     }
 
     static SESSION: Mutex<Option<Session>> = Mutex::new(None);
@@ -70,8 +73,22 @@ mod imp {
         CString::new(serde_json::to_string(state).ok()?).ok()
     }
 
+    /// About two lines of the expanded island's 15pt text: the system caps
+    /// the expanded island at about 125pt (measured on a 14" MacBook Pro,
+    /// macOS 27.2.1), which leaves room for two below the control row. The
+    /// island can't scroll, so it shows the newest words; the full transcript
+    /// is in the overlay's Live panel, which a click on the text reveals.
+    const ISLAND_TEXT_CHARS: usize = 100;
+
     fn send(state: &ContentState) {
-        if let Some(payload) = json(state) {
+        let (committed, tentative) =
+            super::transcript_tail(&state.committed, &state.tentative, ISLAND_TEXT_CHARS);
+        let shown = ContentState {
+            committed,
+            tentative,
+            ..state.clone()
+        };
+        if let Some(payload) = json(&shown) {
             unsafe { handy_island_update(payload.as_ptr()) };
         }
     }
@@ -127,6 +144,7 @@ mod imp {
                 *s = Some(Session {
                     state,
                     last_sent: Instant::now(),
+                    revealed: false,
                 })
             });
             log::info!("Dynamic Island activity started ({phase})");
@@ -187,19 +205,19 @@ mod imp {
         *PENDING_PHASE.lock().unwrap_or_else(|e| e.into_inner()) = Some(phase.to_string());
         *LANGUAGE.lock().unwrap_or_else(|e| e.into_inner()) =
             settings::get_settings(app).app_language;
+        // Some(carrying): a session is running, and carries the session alone
+        // unless the user revealed the overlay.
         let running = session(|s| {
-            if let Some(s) = s.as_mut() {
+            s.as_mut().map(|s| {
                 s.state.phase = phase.to_string();
                 s.state.label = current_label(phase);
                 send(&s.state);
                 s.last_sent = Instant::now();
-                true
-            } else {
-                false
-            }
+                !s.revealed
+            })
         });
-        if running {
-            return true;
+        if let Some(carrying) = running {
+            return carrying;
         }
 
         let started_at = now_secs();
@@ -248,6 +266,38 @@ mod imp {
         });
     }
 
+    /// A click on the island's transcript (handy://island/transcript): show
+    /// the overlay's Live panel, which holds the whole transcript and scrolls,
+    /// while the island keeps running.
+    /// With a running activity the island reaches about 64pt down, against
+    /// 47pt idle (measured on a 14" MacBook Pro, macOS 27.2.1), so a revealed
+    /// overlay at the top moves down by this much to clear it.
+    const REVEALED_OVERLAY_DROP: f64 = 26.0;
+
+    /// Extra top offset for the overlay: non-zero only while it is shown
+    /// alongside a running island activity.
+    pub fn overlay_top_extra() -> f64 {
+        if session(|s| s.as_ref().is_some_and(|s| s.revealed)) {
+            REVEALED_OVERLAY_DROP
+        } else {
+            0.0
+        }
+    }
+
+    pub fn reveal_overlay(app: &AppHandle) {
+        let running = session(|s| {
+            s.as_mut()
+                .map(|s| {
+                    s.revealed = true;
+                })
+                .is_some()
+        });
+        if running {
+            crate::overlay::update_overlay_position(app);
+            let _ = app.emit_to("recording_overlay", "overlay-island-active", false);
+        }
+    }
+
     pub fn end() {
         GENERATION.fetch_add(1, Ordering::SeqCst);
         *PENDING_PHASE.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -256,6 +306,90 @@ mod imp {
             log::info!("Dynamic Island activity ended");
             unsafe { handy_island_end() };
         }
+    }
+}
+
+/// The newest part of a live transcript that fits the island, which can show
+/// only a few lines: up to `max_chars` of `committed` + `tentative`, cut at a
+/// word boundary, with "…" where older text was dropped. `tentative` (the part
+/// the model may still rewrite) is always kept whole, as it is the newest.
+pub(crate) fn transcript_tail(
+    committed: &str,
+    tentative: &str,
+    max_chars: usize,
+) -> (String, String) {
+    let tentative_len = tentative.chars().count();
+    let committed_len = committed.chars().count();
+    if committed_len + tentative_len <= max_chars {
+        return (committed.to_string(), tentative.to_string());
+    }
+    // Room left for committed text once the tentative part is kept whole.
+    let room = max_chars.saturating_sub(tentative_len);
+    let skip = committed_len.saturating_sub(room);
+    let rest: String = committed.chars().skip(skip).collect();
+    // Drop the partial word the cut landed in, unless the cut fell on a space.
+    let starts_mid_word = skip > 0
+        && !committed
+            .chars()
+            .nth(skip - 1)
+            .is_some_and(char::is_whitespace);
+    let rest = if starts_mid_word {
+        rest.split_once(char::is_whitespace)
+            .map(|(_, tail)| tail)
+            .unwrap_or("")
+    } else {
+        &rest
+    };
+    let rest = rest.trim_start();
+    if rest.is_empty() {
+        ("…".to_string(), tentative.to_string())
+    } else {
+        (format!("…{rest}"), tentative.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tail_tests {
+    use super::transcript_tail;
+
+    #[test]
+    fn short_text_is_unchanged() {
+        assert_eq!(
+            transcript_tail("Hello there", "general", 200),
+            ("Hello there".to_string(), "general".to_string())
+        );
+    }
+
+    #[test]
+    fn long_text_keeps_the_newest_words_at_a_word_boundary() {
+        let committed = "one two three four five six seven eight nine ten";
+        let (c, t) = transcript_tail(committed, "eleven", 30);
+        assert_eq!(t, "eleven");
+        assert!(c.starts_with('…'), "older text is marked as dropped: {c:?}");
+        assert!(c.ends_with("ten"), "newest committed word kept: {c:?}");
+        assert!(!c.contains("one two"), "oldest words dropped: {c:?}");
+        // No word is cut in half.
+        for word in c.trim_start_matches('…').split_whitespace() {
+            assert!(
+                committed.split_whitespace().any(|w| w == word),
+                "partial word {word:?}"
+            );
+        }
+        assert!(c.chars().count() + t.chars().count() <= 30 + 2);
+    }
+
+    #[test]
+    fn a_long_tentative_part_drops_all_committed_text() {
+        let (c, t) = transcript_tail("old words here", "a very long tentative phrase", 10);
+        assert_eq!(c, "…");
+        assert_eq!(t, "a very long tentative phrase");
+    }
+
+    #[test]
+    fn counts_characters_not_bytes() {
+        let committed = "café ".repeat(20);
+        let (c, _) = transcript_tail(committed.trim(), "", 12);
+        assert!(c.chars().count() <= 13);
     }
 }
 
@@ -326,8 +460,12 @@ mod imp {
         false
     }
     pub fn set_text(_committed: &str, _tentative: &str) {}
+    pub fn reveal_overlay(_app: &AppHandle) {}
+    pub fn overlay_top_extra() -> f64 {
+        0.0
+    }
     pub fn set_phase(_phase: &str) {}
     pub fn end() {}
 }
 
-pub use imp::{end, set_phase, set_text, show};
+pub use imp::{end, overlay_top_extra, reveal_overlay, set_phase, set_text, show};

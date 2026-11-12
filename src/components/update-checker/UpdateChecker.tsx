@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { arch, platform } from "@tauri-apps/plugin-os";
@@ -159,7 +158,7 @@ const UpdateChecker: React.FC<UpdateCheckerProps> = ({ className = "" }) => {
             break;
         }
       });
-      await relaunch();
+      await commands.relaunchApp();
     } catch (error) {
       console.error("Failed to install update:", error);
     } finally {

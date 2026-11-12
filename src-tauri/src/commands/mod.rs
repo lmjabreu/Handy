@@ -16,6 +16,86 @@ pub fn cancel_operation(app: AppHandle) {
     cancel_current_operation(&app);
 }
 
+/// Restarts Handy, after an update or for the onboarding Accessibility step.
+///
+/// On macOS it goes through LaunchServices (`open`) once this process has
+/// exited, because Tauri's restart runs the binary directly and ActivityKit
+/// refuses an app started that way, so the Dynamic Island stays off until the
+/// next manual launch. Elsewhere, and outside an .app bundle, it is Tauri's
+/// restart.
+#[tauri::command]
+#[specta::specta]
+pub fn relaunch_app(app: AppHandle) {
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| app_bundle_of(&exe))
+    {
+        let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+        let spawned = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(RELAUNCH_SCRIPT)
+            .arg("handy-relaunch")
+            .arg(std::process::id().to_string())
+            .arg(&bundle)
+            .args(&args)
+            .spawn();
+        match spawned {
+            Ok(_) => {
+                app.exit(0);
+                return;
+            }
+            Err(e) => {
+                log::warn!("Relaunch through LaunchServices failed, restarting directly: {e}")
+            }
+        }
+    }
+    app.restart();
+}
+
+/// Waits for the old process ($1) to exit, so the single-instance check does
+/// not hand the new one back to it, then opens the bundle ($2) with the
+/// original arguments.
+#[cfg(target_os = "macos")]
+const RELAUNCH_SCRIPT: &str = r#"pid=$1; bundle=$2; shift 2
+while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
+if [ "$#" -gt 0 ]; then exec /usr/bin/open "$bundle" --args "$@"; else exec /usr/bin/open "$bundle"; fi"#;
+
+/// The .app bundle an executable sits in (`X.app/Contents/MacOS/exe`).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn app_bundle_of(exe: &std::path::Path) -> Option<std::path::PathBuf> {
+    let macos = exe.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    let is_bundle = macos.file_name()? == "MacOS"
+        && contents.file_name()? == "Contents"
+        && bundle.extension()? == "app";
+    is_bundle.then(|| bundle.to_path_buf())
+}
+
+#[cfg(test)]
+mod relaunch_tests {
+    use super::app_bundle_of;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn finds_the_bundle_of_an_app_executable() {
+        assert_eq!(
+            app_bundle_of(Path::new("/Applications/Handy.app/Contents/MacOS/handy")),
+            Some(PathBuf::from("/Applications/Handy.app"))
+        );
+    }
+
+    #[test]
+    fn a_bare_binary_has_no_bundle() {
+        assert_eq!(app_bundle_of(Path::new("/usr/local/bin/handy")), None);
+        assert_eq!(
+            app_bundle_of(Path::new("/repo/src-tauri/target/debug/handy")),
+            None
+        );
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn is_portable() -> bool {

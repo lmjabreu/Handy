@@ -570,6 +570,18 @@ async showMainWindowCommand() : Promise<Result<null, string>> {
 async cancelOperation() : Promise<void> {
     await TAURI_INVOKE("cancel_operation");
 },
+/**
+ * Restarts Handy, after an update or for the onboarding Accessibility step.
+ * 
+ * On macOS it goes through LaunchServices (`open`) once this process has
+ * exited, because Tauri's restart runs the binary directly and ActivityKit
+ * refuses an app started that way, so the Dynamic Island stays off until the
+ * next manual launch. Elsewhere, and outside an .app bundle, it is Tauri's
+ * restart.
+ */
+async relaunchApp() : Promise<void> {
+    await TAURI_INVOKE("relaunch_app");
+},
 async isPortable() : Promise<boolean> {
     return await TAURI_INVOKE("is_portable");
 },

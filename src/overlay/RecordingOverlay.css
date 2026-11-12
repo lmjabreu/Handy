@@ -355,6 +355,11 @@
   height: 18px;
   flex: none;
 }
+/* Below the Dynamic Island there's no dot to balance, so the bars centre on
+   the panel, and with it on the island. */
+.sbase.companion .swave {
+  padding-right: 0;
+}
 .swave i {
   width: 4px;
   min-height: 3px;

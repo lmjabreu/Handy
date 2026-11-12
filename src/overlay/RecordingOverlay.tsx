@@ -332,7 +332,7 @@ const RecordingOverlay: React.FC = () => {
   // dot (left) | waveform (center) | timer + cancel (right) — same structure for
   // pill & panel, so the Live morph is a pure width change.
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
-    <div className="sbase">
+    <div className={islandCompanion ? "sbase companion" : "sbase"}>
       <div className="sbase-l">
         {!islandCompanion && (
           <span className={`sdot ${captureReady ? "ready" : "arming"}`} />

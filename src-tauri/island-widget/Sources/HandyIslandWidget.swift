@@ -54,7 +54,7 @@ struct HandyIslandActivity: Widget {
             } compactLeading: {
                 PhaseGlyph(phase: context.state.phase)
             } compactTrailing: {
-                Elapsed(since: context.state.startedAt)
+                CompactTrailing(state: context.state)
             } minimal: {
                 PhaseGlyph(phase: context.state.phase)
             }
@@ -98,6 +98,26 @@ private struct ControlRow: View {
         HStack {
             Indicator(state: state)
             Spacer(minLength: 8)
+            Elapsed(since: state.startedAt)
+        }
+    }
+}
+
+/// The newest words while listening, so the island shows the dictation is
+/// heard without a click; the timer before the first word and while working.
+/// The compact island gives this side about 100pt, one or two words.
+private struct CompactTrailing: View {
+    let state: HandyIslandAttributes.ContentState
+    var body: some View {
+        let words = [state.committed, state.tentative].filter { !$0.isEmpty }.joined(separator: " ")
+        if isListening(state.phase) && !words.isEmpty {
+            Text(words)
+                .font(.system(size: 13).italic())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.head)
+                .frame(maxWidth: 120, alignment: .trailing)
+        } else {
             Elapsed(since: state.startedAt)
         }
     }

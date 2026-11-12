@@ -49,10 +49,9 @@ mod imp {
         last_sent: Instant,
         /// The user asked for the overlay's Live panel by clicking the island,
         /// so the overlay stays visible for the rest of this session.
+        /// The overlay's Live panel is on screen below the island: from the
+        /// start in IslandWithText mode, or after a click on the island.
         revealed: bool,
-        /// Show the overlay's Live panel below the island once words arrive
-        /// (DynamicIslandMode::IslandWithText).
-        auto_reveal: bool,
     }
 
     static SESSION: Mutex<Option<Session>> = Mutex::new(None);
@@ -130,7 +129,8 @@ mod imp {
         unsafe { handy_top_inset(x, width) }
     }
 
-    /// The mode's choice for the next session, read when it starts.
+    /// Whether the next session starts with the Live panel below the island
+    /// (DynamicIslandMode::IslandWithText), read when it starts.
     static AUTO_REVEAL: AtomicBool = AtomicBool::new(false);
 
     /// Bumped by `end`, so start retries left over from a finished session stop.
@@ -166,8 +166,7 @@ mod imp {
                 *s = Some(Session {
                     state,
                     last_sent: Instant::now(),
-                    revealed: false,
-                    auto_reveal: AUTO_REVEAL.load(Ordering::SeqCst),
+                    revealed: AUTO_REVEAL.load(Ordering::SeqCst),
                 })
             });
             log::info!("Dynamic Island activity started ({phase})");
@@ -196,7 +195,12 @@ mod imp {
                         None => Some(false),
                         Some(phase) => match try_start(&phase, started_at) {
                             Ok(()) => {
-                                let _ = handle.emit_to("recording_overlay", "overlay-island-active", true);
+                                let (event, value) = if companion() {
+                                    ("overlay-island-companion", true)
+                                } else {
+                                    ("overlay-island-active", true)
+                                };
+                                let _ = handle.emit_to("recording_overlay", event, value);
                                 Some(true)
                             }
                             Err(e) if e.contains("visibility") => None,
@@ -249,7 +253,7 @@ mod imp {
 
         let started_at = now_secs();
         match try_start(phase, started_at) {
-            Ok(()) => true,
+            Ok(()) => !companion(),
             Err(e) if e.contains("visibility") => {
                 log::debug!("Dynamic Island start waiting for the overlay to count as visible");
                 retry_when_visible(app, started_at);
@@ -263,23 +267,22 @@ mod imp {
     }
 
     /// Live transcript for the running activity, coalesced to TEXT_INTERVAL_MS.
-    /// In IslandWithText mode the first words also bring up the Live panel
-    /// below the island, since the island shows text only when clicked.
-    pub fn set_text(app: &AppHandle, committed: &str, tentative: &str) {
-        let reveal = session(|s| {
-            let Some(s) = s.as_mut() else { return false };
+    pub fn set_text(committed: &str, tentative: &str) {
+        session(|s| {
+            let Some(s) = s.as_mut() else { return };
             s.state.committed = committed.to_string();
             s.state.tentative = tentative.to_string();
             if s.last_sent.elapsed().as_millis() >= TEXT_INTERVAL_MS {
                 send(&s.state);
                 s.last_sent = Instant::now();
             }
-            s.auto_reveal && !s.revealed && !(committed.is_empty() && tentative.is_empty())
         });
-        if reveal {
-            let handle = app.clone();
-            let _ = app.run_on_main_thread(move || reveal_overlay(&handle));
-        }
+    }
+
+    /// Whether the overlay's panel is showing below a running island, so it
+    /// can leave out what the island already shows.
+    pub fn companion() -> bool {
+        session(|s| s.as_ref().is_some_and(|s| s.revealed))
     }
 
     pub fn set_phase(phase: &str) {
@@ -315,6 +318,7 @@ mod imp {
         if running {
             crate::overlay::update_overlay_position(app);
             let _ = app.emit_to("recording_overlay", "overlay-island-active", false);
+            let _ = app.emit_to("recording_overlay", "overlay-island-companion", true);
         }
     }
 
@@ -482,7 +486,10 @@ mod imp {
     pub fn show(_app: &AppHandle, _phase: &str) -> bool {
         false
     }
-    pub fn set_text(_app: &AppHandle, _committed: &str, _tentative: &str) {}
+    pub fn set_text(_committed: &str, _tentative: &str) {}
+    pub fn companion() -> bool {
+        false
+    }
     pub fn reveal_overlay(_app: &AppHandle) {}
     pub fn top_inset(_x: f64, _width: f64) -> f64 {
         0.0
@@ -491,4 +498,4 @@ mod imp {
     pub fn end() {}
 }
 
-pub use imp::{available, end, reveal_overlay, set_phase, set_text, show, top_inset};
+pub use imp::{available, companion, end, reveal_overlay, set_phase, set_text, show, top_inset};

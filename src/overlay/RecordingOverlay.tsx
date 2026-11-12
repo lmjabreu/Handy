@@ -83,6 +83,10 @@ const RecordingOverlay: React.FC = () => {
   // True while the Dynamic Island's Live Activity carries the session (macOS);
   // the window stays on screen, which ActivityKit needs, but draws nothing.
   const [islandActive, setIslandActive] = useState(false);
+  // True while this panel sits below a running Dynamic Island (macOS): the
+  // island already shows the recording dot, so the panel leaves out the dot
+  // and timer.
+  const [islandCompanion, setIslandCompanion] = useState(false);
   const [noticeWidth, setNoticeWidth] = useState<number>();
   const noticeProbeRef = useRef<HTMLSpanElement>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -105,6 +109,10 @@ const RecordingOverlay: React.FC = () => {
       const unlistenIsland = await listen<boolean>(
         "overlay-island-active",
         (event) => setIslandActive(event.payload),
+      );
+      const unlistenCompanion = await listen<boolean>(
+        "overlay-island-companion",
+        (event) => setIslandCompanion(event.payload),
       );
 
       const unlistenShow = await listen("show-overlay", async (event) => {
@@ -214,6 +222,7 @@ const RecordingOverlay: React.FC = () => {
       return () => {
         unlistenNotice();
         unlistenIsland();
+        unlistenCompanion();
         unlistenShow();
         unlistenHide();
         unlistenReady();
@@ -325,11 +334,15 @@ const RecordingOverlay: React.FC = () => {
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
       <div className="sbase-l">
-        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
+        {!islandCompanion && (
+          <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
+        )}
       </div>
       {waveform}
       <div className="sbase-r">
-        {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
+        {showTimer && !islandCompanion && (
+          <span className="stimer">{fmtTime(elapsed)}</span>
+        )}
         {showCancel && cancelBtn}
       </div>
     </div>

@@ -678,6 +678,7 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
             crate::island::show(app_handle, state)
         };
         let _ = overlay_window.emit("overlay-island-active", island_active);
+        let _ = overlay_window.emit("overlay-island-companion", crate::island::companion());
         let _ = overlay_window.emit("show-overlay", state);
     }
 }

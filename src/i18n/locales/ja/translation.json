@@ -523,6 +523,10 @@
             "bottom": "下",
             "top": "上"
           }
+        },
+        "dynamicIsland": {
+          "label": "Show in the Dynamic Island",
+          "description": "On a Mac with a Dynamic Island, show recording and the live transcription there instead of in the floating overlay. Click the island to see more."
         }
       },
       "pasteMethod": {

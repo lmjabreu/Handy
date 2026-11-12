@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dropdown } from "../ui/Dropdown";
 import { SettingContainer } from "../ui/SettingContainer";
+import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { useSettings } from "../../hooks/useSettings";
+import { commands } from "@/bindings";
 import type { OverlayPosition, OverlayStyle } from "@/bindings";
 
 interface ShowOverlayProps {
@@ -14,6 +16,14 @@ export const ShowOverlay: React.FC<ShowOverlayProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
     const { t } = useTranslation();
     const { getSetting, updateSetting, isUpdating } = useSettings();
+    // Only Macs with a Dynamic Island get the choice; elsewhere it is hidden.
+    const [islandAvailable, setIslandAvailable] = useState(false);
+    useEffect(() => {
+      commands
+        .isDynamicIslandAvailable()
+        .then(setIslandAvailable)
+        .catch(() => setIslandAvailable(false));
+    }, []);
 
     const styleOptions = [
       {
@@ -83,6 +93,24 @@ export const ShowOverlay: React.FC<ShowOverlayProps> = React.memo(
             />
           </SettingContainer>
         )}
+
+        {selectedStyle !== "none" &&
+          selectedPosition === "top" &&
+          islandAvailable && (
+            <ToggleSwitch
+              checked={getSetting("dynamic_island_enabled") ?? true}
+              onChange={(enabled) =>
+                updateSetting("dynamic_island_enabled", enabled)
+              }
+              isUpdating={isUpdating("dynamic_island_enabled")}
+              label={t("settings.advanced.overlay.dynamicIsland.label")}
+              description={t(
+                "settings.advanced.overlay.dynamicIsland.description",
+              )}
+              descriptionMode={descriptionMode}
+              grouped={grouped}
+            />
+          )}
       </>
     );
   },

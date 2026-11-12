@@ -458,6 +458,10 @@ pub struct AppSettings {
     pub spoken_languages: Vec<String>,
     #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
+    /// With the overlay at the top on a Mac with a Dynamic Island, show the
+    /// recording state there instead of in the floating overlay.
+    #[serde(default = "default_dynamic_island_enabled")]
+    pub dynamic_island_enabled: bool,
     #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
     #[serde(default = "default_log_level")]
@@ -615,6 +619,10 @@ fn default_whats_new_last_seen_version() -> String {
 
 fn default_selected_language() -> String {
     "auto".to_string()
+}
+
+fn default_dynamic_island_enabled() -> bool {
+    true
 }
 
 fn default_overlay_position() -> OverlayPosition {
@@ -1023,6 +1031,7 @@ pub fn get_default_settings() -> AppSettings {
         translate_to_english: false,
         selected_language: "auto".to_string(),
         overlay_position: default_overlay_position(),
+        dynamic_island_enabled: default_dynamic_island_enabled(),
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
@@ -1821,6 +1830,23 @@ mod tests {
             serde_json::from_value(raw.get("overlay_position").unwrap().clone())
                 .expect("legacy \"none\" should deserialize, not error");
         assert_eq!(position, OverlayPosition::Bottom);
+    }
+
+    #[test]
+    fn dynamic_island_defaults_on_for_stores_saved_before_it() {
+        // Stores written before the setting existed have no key; they keep
+        // the island, which was the only behaviour at the top until then.
+        let mut raw = serde_json::to_value(get_default_settings()).unwrap();
+        raw.as_object_mut()
+            .unwrap()
+            .remove("dynamic_island_enabled");
+        let settings: AppSettings = serde_json::from_value(raw).unwrap();
+        assert!(settings.dynamic_island_enabled);
+
+        let mut raw = serde_json::to_value(get_default_settings()).unwrap();
+        raw["dynamic_island_enabled"] = serde_json::json!(false);
+        let settings: AppSettings = serde_json::from_value(raw).unwrap();
+        assert!(!settings.dynamic_island_enabled);
     }
 
     #[test]

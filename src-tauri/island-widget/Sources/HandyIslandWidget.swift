@@ -104,7 +104,7 @@ private struct ControlRow: View {
 }
 
 /// The newest words while listening, so the island shows the dictation is
-/// heard without a click; the timer before the first word and while working.
+/// heard without a click; nothing before the first word or while working.
 /// The compact island gives this side about 100pt, one or two words.
 private struct CompactTrailing: View {
     let state: HandyIslandAttributes.ContentState
@@ -117,8 +117,6 @@ private struct CompactTrailing: View {
                 .lineLimit(1)
                 .truncationMode(.head)
                 .frame(maxWidth: 120, alignment: .trailing)
-        } else {
-            Elapsed(since: state.startedAt)
         }
     }
 }

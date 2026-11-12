@@ -98,17 +98,24 @@ mod imp {
         f(&mut guard)
     }
 
-    /// Whether this session should go to the island: overlay at the top, and
-    /// a Mac whose display has a camera housing with Live Activities on.
+    /// Whether this session should go to the island: overlay at the top, the
+    /// island setting on, and a Mac whose display has a camera housing with
+    /// Live Activities on.
     pub fn wanted(app: &AppHandle) -> bool {
-        if settings::get_settings(app).overlay_position != OverlayPosition::Top {
+        let settings = settings::get_settings(app);
+        if settings.overlay_position != OverlayPosition::Top || !settings.dynamic_island_enabled {
             return false;
         }
-        let supported = unsafe { handy_island_supported() } == 1;
+        let supported = available();
         if !supported {
             log::debug!("Dynamic Island not used: no camera housing or Live Activities are off");
         }
         supported
+    }
+
+    /// Whether this Mac has a camera housing and Live Activities on.
+    pub fn available() -> bool {
+        unsafe { handy_island_supported() == 1 }
     }
 
     /// Bumped by `end`, so start retries left over from a finished session stop.
@@ -456,6 +463,9 @@ mod tests {
 #[cfg(not(target_os = "macos"))]
 mod imp {
     use tauri::AppHandle;
+    pub fn available() -> bool {
+        false
+    }
     pub fn show(_app: &AppHandle, _phase: &str) -> bool {
         false
     }
@@ -468,4 +478,4 @@ mod imp {
     pub fn end() {}
 }
 
-pub use imp::{end, overlay_top_extra, reveal_overlay, set_phase, set_text, show};
+pub use imp::{available, end, overlay_top_extra, reveal_overlay, set_phase, set_text, show};

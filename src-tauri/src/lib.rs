@@ -699,6 +699,8 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_selected_language_setting,
             shortcut::change_spoken_languages_setting,
             shortcut::change_overlay_position_setting,
+            shortcut::change_dynamic_island_setting,
+            commands::is_dynamic_island_available,
             shortcut::change_overlay_style_setting,
             shortcut::change_debug_mode_setting,
             shortcut::change_word_correction_threshold_setting,

@@ -96,6 +96,14 @@ mod relaunch_tests {
     }
 }
 
+/// Whether this Mac can show Handy in the Dynamic Island, so the settings only
+/// offer the choice where it applies.
+#[tauri::command]
+#[specta::specta]
+pub fn is_dynamic_island_available() -> bool {
+    crate::island::available()
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn is_portable() -> bool {

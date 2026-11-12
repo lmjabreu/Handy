@@ -89,6 +89,28 @@ const EMIT_THROTTLE_MS: u64 = 33; // ~30 FPS
 
 #[cfg(target_os = "macos")]
 const OVERLAY_TOP_OFFSET: f64 = 46.0;
+
+/// Room between a camera housing (or the Dynamic Island drawn over it) and
+/// the overlay at the top. The island's compact and minimal forms are the
+/// housing's height (47.5pt on a 14" MacBook Pro, macOS 27.2.1), and the fixed
+/// offset alone left the overlay overlapping it.
+#[cfg(target_os = "macos")]
+const HOUSING_GAP: f64 = 16.0;
+
+/// The overlay's distance from the top of the screen: the usual offset, or
+/// further down on a screen with a camera housing so it clears the housing
+/// and the Dynamic Island.
+fn top_offset(monitor_x: f64, monitor_width: f64) -> f64 {
+    #[cfg(target_os = "macos")]
+    {
+        let inset = crate::island::top_inset(monitor_x, monitor_width);
+        if inset > 0.0 {
+            return OVERLAY_TOP_OFFSET.max(inset + HOUSING_GAP);
+        }
+    }
+    let _ = (monitor_x, monitor_width);
+    OVERLAY_TOP_OFFSET
+}
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const OVERLAY_TOP_OFFSET: f64 = 4.0;
 
@@ -280,9 +302,7 @@ fn calculate_overlay_position(
 
     let x = monitor_x + (monitor_width - width) / 2.0;
     let y = match settings.overlay_position {
-        // Shown alongside a running Dynamic Island activity, the panel moves
-        // down so it clears the island, which extends lower than it does idle.
-        OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET + crate::island::overlay_top_extra(),
+        OverlayPosition::Top => monitor_y + top_offset(monitor_x, monitor_width),
         OverlayPosition::Bottom => {
             // work_area.position shares monitor.position's global coordinate
             // space, so no monitor offset is added.

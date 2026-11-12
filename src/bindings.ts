@@ -117,9 +117,9 @@ async changeOverlayPositionSetting(position: string) : Promise<Result<null, stri
     else return { status: "error", error: e  as any };
 }
 },
-async changeDynamicIslandSetting(enabled: boolean) : Promise<Result<null, string>> {
+async changeDynamicIslandModeSetting(mode: string) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("change_dynamic_island_setting", { enabled }) };
+    return { status: "ok", data: await TAURI_INVOKE("change_dynamic_island_mode_setting", { mode }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1170,10 +1170,10 @@ selected_channel?: number | null; clamshell_microphone?: string | null; selected
  */
 spoken_languages?: string[]; overlay_position?: OverlayPosition; 
 /**
- * With the overlay at the top on a Mac with a Dynamic Island, show the
- * recording state there instead of in the floating overlay.
+ * With the overlay at the top on a Mac with a Dynamic Island: the island
+ * with the Live panel below it, the island alone, or the floating overlay.
  */
-dynamic_island_enabled?: boolean; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; 
+dynamic_island_mode?: DynamicIslandMode; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; 
 /**
  * Experimental, macOS only: move a Bluetooth headset (AirPods) to this
  * Mac while recording, so its microphone does not return silence while
@@ -1254,6 +1254,23 @@ export type ChineseScript =
 "traditional_hk"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+/**
+ * Where the recording state goes on a Mac with a Dynamic Island, with the
+ * overlay at the top.
+ */
+export type DynamicIslandMode = 
+/**
+ * The island, with the overlay's Live panel below it once words arrive.
+ */
+"island_with_text" | 
+/**
+ * The island alone; its transcript shows when it is clicked.
+ */
+"island" | 
+/**
+ * The floating overlay, no island.
+ */
+"panel"
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
 export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
 /**

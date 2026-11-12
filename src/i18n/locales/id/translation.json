@@ -525,8 +525,13 @@
           }
         },
         "dynamicIsland": {
-          "label": "Show in the Dynamic Island",
-          "description": "On a Mac with a Dynamic Island, show recording and the live transcription there instead of in the floating overlay. Click the island to see more."
+          "title": "Dynamic Island",
+          "description": "On a Mac with a Dynamic Island, where recording and the live transcription show.",
+          "options": {
+            "islandWithText": "Island with live text below",
+            "island": "Island only",
+            "panel": "Floating panel"
+          }
         }
       },
       "pasteMethod": {

@@ -8,10 +8,10 @@
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use crate::settings::{self, OverlayPosition};
+    use crate::settings::{self, DynamicIslandMode, OverlayPosition};
     use serde::Serialize;
     use std::ffi::{c_char, c_int, CStr, CString};
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::Mutex;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
     use tauri::{AppHandle, Emitter};
@@ -25,6 +25,7 @@ mod imp {
         ) -> c_int;
         fn handy_island_update(json: *const c_char);
         fn handy_island_end();
+        fn handy_top_inset(x: f64, width: f64) -> f64;
     }
 
     /// Live text updates are coalesced to this interval; ActivityKit was
@@ -49,6 +50,9 @@ mod imp {
         /// The user asked for the overlay's Live panel by clicking the island,
         /// so the overlay stays visible for the rest of this session.
         revealed: bool,
+        /// Show the overlay's Live panel below the island once words arrive
+        /// (DynamicIslandMode::IslandWithText).
+        auto_reveal: bool,
     }
 
     static SESSION: Mutex<Option<Session>> = Mutex::new(None);
@@ -103,7 +107,9 @@ mod imp {
     /// Live Activities on.
     pub fn wanted(app: &AppHandle) -> bool {
         let settings = settings::get_settings(app);
-        if settings.overlay_position != OverlayPosition::Top || !settings.dynamic_island_enabled {
+        if settings.overlay_position != OverlayPosition::Top
+            || settings.dynamic_island_mode == DynamicIslandMode::Panel
+        {
             return false;
         }
         let supported = available();
@@ -117,6 +123,15 @@ mod imp {
     pub fn available() -> bool {
         unsafe { handy_island_supported() == 1 }
     }
+
+    /// How far the camera housing reaches down the screen spanning `x` to
+    /// `x + width` (points), or 0 on a screen without one. Main thread only.
+    pub fn top_inset(x: f64, width: f64) -> f64 {
+        unsafe { handy_top_inset(x, width) }
+    }
+
+    /// The mode's choice for the next session, read when it starts.
+    static AUTO_REVEAL: AtomicBool = AtomicBool::new(false);
 
     /// Bumped by `end`, so start retries left over from a finished session stop.
     static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -152,6 +167,7 @@ mod imp {
                     state,
                     last_sent: Instant::now(),
                     revealed: false,
+                    auto_reveal: AUTO_REVEAL.load(Ordering::SeqCst),
                 })
             });
             log::info!("Dynamic Island activity started ({phase})");
@@ -210,8 +226,12 @@ mod imp {
             return false;
         }
         *PENDING_PHASE.lock().unwrap_or_else(|e| e.into_inner()) = Some(phase.to_string());
-        *LANGUAGE.lock().unwrap_or_else(|e| e.into_inner()) =
-            settings::get_settings(app).app_language;
+        let settings = settings::get_settings(app);
+        AUTO_REVEAL.store(
+            settings.dynamic_island_mode == DynamicIslandMode::IslandWithText,
+            Ordering::SeqCst,
+        );
+        *LANGUAGE.lock().unwrap_or_else(|e| e.into_inner()) = settings.app_language;
         // Some(carrying): a session is running, and carries the session alone
         // unless the user revealed the overlay.
         let running = session(|s| {
@@ -243,16 +263,23 @@ mod imp {
     }
 
     /// Live transcript for the running activity, coalesced to TEXT_INTERVAL_MS.
-    pub fn set_text(committed: &str, tentative: &str) {
-        session(|s| {
-            let Some(s) = s.as_mut() else { return };
+    /// In IslandWithText mode the first words also bring up the Live panel
+    /// below the island, since the island shows text only when clicked.
+    pub fn set_text(app: &AppHandle, committed: &str, tentative: &str) {
+        let reveal = session(|s| {
+            let Some(s) = s.as_mut() else { return false };
             s.state.committed = committed.to_string();
             s.state.tentative = tentative.to_string();
             if s.last_sent.elapsed().as_millis() >= TEXT_INTERVAL_MS {
                 send(&s.state);
                 s.last_sent = Instant::now();
             }
+            s.auto_reveal && !s.revealed && !(committed.is_empty() && tentative.is_empty())
         });
+        if reveal {
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || reveal_overlay(&handle));
+        }
     }
 
     pub fn set_phase(phase: &str) {
@@ -273,24 +300,10 @@ mod imp {
         });
     }
 
-    /// A click on the island's transcript (handy://island/transcript): show
-    /// the overlay's Live panel, which holds the whole transcript and scrolls,
-    /// while the island keeps running.
-    /// With a running activity the island reaches about 64pt down, against
-    /// 47pt idle (measured on a 14" MacBook Pro, macOS 27.2.1), so a revealed
-    /// overlay at the top moves down by this much to clear it.
-    const REVEALED_OVERLAY_DROP: f64 = 26.0;
-
-    /// Extra top offset for the overlay: non-zero only while it is shown
-    /// alongside a running island activity.
-    pub fn overlay_top_extra() -> f64 {
-        if session(|s| s.as_ref().is_some_and(|s| s.revealed)) {
-            REVEALED_OVERLAY_DROP
-        } else {
-            0.0
-        }
-    }
-
+    /// Shows the overlay's Live panel, which holds the whole transcript and
+    /// scrolls, below the running island: on a click on the island's
+    /// transcript (handy://island/transcript), or on the first words in
+    /// IslandWithText mode. Main thread only.
     pub fn reveal_overlay(app: &AppHandle) {
         let running = session(|s| {
             s.as_mut()
@@ -469,13 +482,13 @@ mod imp {
     pub fn show(_app: &AppHandle, _phase: &str) -> bool {
         false
     }
-    pub fn set_text(_committed: &str, _tentative: &str) {}
+    pub fn set_text(_app: &AppHandle, _committed: &str, _tentative: &str) {}
     pub fn reveal_overlay(_app: &AppHandle) {}
-    pub fn overlay_top_extra() -> f64 {
+    pub fn top_inset(_x: f64, _width: f64) -> f64 {
         0.0
     }
     pub fn set_phase(_phase: &str) {}
     pub fn end() {}
 }
 
-pub use imp::{available, end, overlay_top_extra, reveal_overlay, set_phase, set_text, show};
+pub use imp::{available, end, reveal_overlay, set_phase, set_text, show, top_inset};

@@ -29,6 +29,19 @@ public func handy_island_supported() -> Int32 {
     return enabled && hasHousing ? 1 : 0
 }
 
+/// How far the camera housing reaches down the screen whose frame starts at
+/// `x` and is `width` wide (points), or 0 on a screen without one. Handy keeps
+/// its top overlay below this so it clears the housing and the island.
+@_cdecl("handy_top_inset")
+public func handy_top_inset(_ x: Double, _ width: Double) -> Double {
+    guard #available(macOS 12.0, *) else { return 0 }
+    let screen = NSScreen.screens.first {
+        abs($0.frame.minX - x) < 1 && abs($0.frame.width - width) < 1
+    }
+    guard let screen, screen.auxiliaryTopLeftArea != nil else { return 0 }
+    return Double(screen.safeAreaInsets.top)
+}
+
 /// Starts the activity, or updates it if one is running. Returns 1 on
 /// success. Starting needs a Handy window on screen (the overlay panel), or
 /// ActivityKit refuses with `visibility`; the error goes to `error_out`.

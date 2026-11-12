@@ -1427,7 +1427,7 @@ fn agreed_language(transcripts: &[Transcript]) -> Option<String> {
 }
 
 fn emit_stream_text(app_handle: &AppHandle, committed: &str, tentative: &str) {
-    crate::island::set_text(committed, tentative);
+    crate::island::set_text(app_handle, committed, tentative);
     let _ = StreamTextEvent {
         committed: committed.to_string(),
         tentative: tentative.to_string(),

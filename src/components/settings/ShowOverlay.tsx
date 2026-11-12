@@ -2,10 +2,13 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Dropdown } from "../ui/Dropdown";
 import { SettingContainer } from "../ui/SettingContainer";
-import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { useSettings } from "../../hooks/useSettings";
 import { commands } from "@/bindings";
-import type { OverlayPosition, OverlayStyle } from "@/bindings";
+import type {
+  DynamicIslandMode,
+  OverlayPosition,
+  OverlayStyle,
+} from "@/bindings";
 
 interface ShowOverlayProps {
   descriptionMode?: "inline" | "tooltip";
@@ -48,6 +51,23 @@ export const ShowOverlay: React.FC<ShowOverlayProps> = React.memo(
       {
         value: "top",
         label: t("settings.advanced.overlay.position.options.top"),
+      },
+    ];
+
+    const islandOptions = [
+      {
+        value: "island_with_text",
+        label: t(
+          "settings.advanced.overlay.dynamicIsland.options.islandWithText",
+        ),
+      },
+      {
+        value: "island",
+        label: t("settings.advanced.overlay.dynamicIsland.options.island"),
+      },
+      {
+        value: "panel",
+        label: t("settings.advanced.overlay.dynamicIsland.options.panel"),
       },
     ];
 
@@ -97,19 +117,29 @@ export const ShowOverlay: React.FC<ShowOverlayProps> = React.memo(
         {selectedStyle !== "none" &&
           selectedPosition === "top" &&
           islandAvailable && (
-            <ToggleSwitch
-              checked={getSetting("dynamic_island_enabled") ?? true}
-              onChange={(enabled) =>
-                updateSetting("dynamic_island_enabled", enabled)
-              }
-              isUpdating={isUpdating("dynamic_island_enabled")}
-              label={t("settings.advanced.overlay.dynamicIsland.label")}
+            <SettingContainer
+              title={t("settings.advanced.overlay.dynamicIsland.title")}
               description={t(
                 "settings.advanced.overlay.dynamicIsland.description",
               )}
               descriptionMode={descriptionMode}
               grouped={grouped}
-            />
+            >
+              <Dropdown
+                options={islandOptions}
+                selectedValue={
+                  (getSetting("dynamic_island_mode") ||
+                    "island_with_text") as DynamicIslandMode
+                }
+                onSelect={(value) =>
+                  updateSetting(
+                    "dynamic_island_mode",
+                    value as DynamicIslandMode,
+                  )
+                }
+                disabled={isUpdating("dynamic_island_mode")}
+              />
+            </SettingContainer>
           )}
       </>
     );

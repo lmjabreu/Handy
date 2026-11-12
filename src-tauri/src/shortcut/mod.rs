@@ -756,9 +756,20 @@ pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Resu
 
 #[tauri::command]
 #[specta::specta]
-pub fn change_dynamic_island_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+pub fn change_dynamic_island_mode_setting(app: AppHandle, mode: String) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
-    settings.dynamic_island_enabled = enabled;
+    settings.dynamic_island_mode = match mode.as_str() {
+        "island_with_text" => settings::DynamicIslandMode::IslandWithText,
+        "island" => settings::DynamicIslandMode::Island,
+        "panel" => settings::DynamicIslandMode::Panel,
+        other => {
+            warn!(
+                "Invalid Dynamic Island mode '{}', keeping the current one",
+                other
+            );
+            return Err(format!("Invalid Dynamic Island mode '{other}'"));
+        }
+    };
     settings::write_settings(&app, settings);
     Ok(())
 }

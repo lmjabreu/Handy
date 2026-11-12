@@ -97,6 +97,25 @@ const OVERLAY_TOP_OFFSET: f64 = 46.0;
 #[cfg(target_os = "macos")]
 const HOUSING_GAP: f64 = 16.0;
 
+/// While the microphone is on, macOS's indicator makes the Dynamic Island
+/// wider on its right, so the island sits right of the housing's centre: 5.75pt
+/// on a 14" MacBook Pro, macOS 27.2.1, measured with the island holding
+/// Handy's glyph and with it holding only the indicator. The overlay is only
+/// shown while recording, so it follows the island.
+#[cfg(target_os = "macos")]
+const ISLAND_MIC_SHIFT: f64 = 5.75;
+
+/// How far right of the screen's centre the top overlay goes: on a screen with
+/// a camera housing, enough to line up with the Dynamic Island.
+fn top_x_shift(monitor_x: f64, monitor_width: f64) -> f64 {
+    #[cfg(target_os = "macos")]
+    if crate::island::top_inset(monitor_x, monitor_width) > 0.0 {
+        return ISLAND_MIC_SHIFT;
+    }
+    let _ = (monitor_x, monitor_width);
+    0.0
+}
+
 /// The overlay's distance from the top of the screen: the usual offset, or
 /// further down on a screen with a camera housing so it clears the housing
 /// and the Dynamic Island.
@@ -300,7 +319,10 @@ fn calculate_overlay_position(
 
     let settings = settings::get_settings(app_handle);
 
-    let x = monitor_x + (monitor_width - width) / 2.0;
+    let mut x = monitor_x + (monitor_width - width) / 2.0;
+    if settings.overlay_position == OverlayPosition::Top {
+        x += top_x_shift(monitor_x, monitor_width);
+    }
     let y = match settings.overlay_position {
         OverlayPosition::Top => monitor_y + top_offset(monitor_x, monitor_width),
         OverlayPosition::Bottom => {

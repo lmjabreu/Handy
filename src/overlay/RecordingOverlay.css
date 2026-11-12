@@ -54,10 +54,10 @@
 }
 /* Below the Dynamic Island the panel lines up with the island's centre, but
    reads as left of it: the island's mic indicator on the right outweighs
-   Handy's dot on the left. 3px right was picked by eye from four offsets;
-   padding on one side moves the centred card by half of it. */
+   Handy's dot on the left, so it sits 5px right, picked by eye; padding on
+   one side moves the centred card by half of it. */
 .ov-stage.top.island {
-  padding-left: 6px;
+  padding-left: 10px;
 }
 
 /* Compact pill: fade the whole container in/out (the pill itself never pops or
